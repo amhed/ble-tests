@@ -1,5 +1,12 @@
-import { BleManager, Device } from "react-native-ble-plx";
-import { Button, View } from "react-native";
+import encoder from 'react-native-base64'
+
+import {
+  BleError,
+  BleManager,
+  Characteristic,
+  Device,
+} from "react-native-ble-plx";
+import { Button, View, Text } from "react-native";
 import { useEffect, useState } from "react";
 
 const bleManager = new BleManager();
@@ -35,8 +42,37 @@ export default function AccountScreen() {
         await deviceConnection.discoverAllServicesAndCharacteristics();
       bleManager.stopDeviceScan();
       console.log("Connected to device", deviceConnection);
-      console.log("Services", services);
-      // startStreamingData(deviceConnection);
+
+      const command = 'NRF.nfcURL("https://wallet.coinbase.com");\n';
+      const base64 = encoder.encode(command, "utf-8");
+
+
+      const serviceUUID = "6e400001-b5a3-f393-e0a9-e50e24dcca9e";
+      const rxCharacteristicUUID = "6e400002-b5a3-f393-e0a9-e50e24dcca9e";
+
+      
+      const txCharacteristicUUID = "6e400003-b5a3-f393-e0a9-e50e24dcca9e";
+      device.monitorCharacteristicForService(
+        serviceUUID,
+        txCharacteristicUUID,
+        (error, characteristic) => {
+          if (error || !characteristic) {
+            console.error("Notification error: ", error);
+            return;
+          }
+          const receivedString = encoder.encode(
+            characteristic.value ?? "",
+            "base64"
+          );
+          console.log("Puck responded: ", receivedString);
+        }
+      );
+
+      await deviceConnection.writeCharacteristicWithResponseForService(
+        serviceUUID,
+        rxCharacteristicUUID,
+        base64
+      );
     } catch (e) {
       console.log("FAILED TO CONNECT", e);
     }
@@ -46,9 +82,11 @@ export default function AccountScreen() {
     <View>
       {allDevices &&
         allDevices.map((device) => (
-          <Button key={device.id} onPress={() => connectToDevice(device)}>
-            <Text>{device.name}</Text>
-          </Button>
+          <Button
+            key={device.id}
+            onPress={() => connectToDevice(device)}
+            title={device.name ?? "Unknown device"}
+          />
         ))}
     </View>
   );
